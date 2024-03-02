@@ -2,7 +2,6 @@
 .model flat, stdcall
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;includem biblioteci, si declaram ce functii vrem sa importam
 includelib msvcrt.lib
 extern exit: proc
 extern malloc: proc
@@ -12,13 +11,11 @@ includelib canvas.lib
 extern BeginDrawing: proc
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;declaram simbolul start ca public - de acolo incepe executia
 public start
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;sectiunile programului, date, respectiv cod
 .data
-;aici declaram date
+
 window_title DB "pacman",0
 area_width EQU 540
 area_height EQU 360
@@ -27,7 +24,7 @@ x dd 0
 y dd 0
 
 
-counter DD 0 ; numara evenimentele de tip timer
+counter DD 0 
 movctr dd 0
 
 arg1 EQU 8
@@ -96,9 +93,9 @@ sss db 0
 ;ghost_lives db 1,1,1,1
 
 .code
-; procedura make_text afiseaza o litera sau o cifra la coordonatele date
-; arg1 - simbolul de afisat (litera sau cifra)
-; arg2 - pointer la vectorul de pixeli
+;this proc displays a character fomr the digits/letters .inc at given coords
+; arg1 - character
+; arg2 - pixel vector pointer
 ; arg3 - pos_x
 ; arg4 - pos_y
 make_text proc
@@ -106,7 +103,7 @@ make_text proc
 	mov ebp, esp
 	pusha
 	
-	mov eax, [ebp+arg1] ; citim simbolul de afisat
+	mov eax, [ebp+arg1] ; character
 	cmp eax, 'A'
 	jl make_digit
 	cmp eax, 'Z'
@@ -123,7 +120,7 @@ make_digit:
 	lea esi, digits
 	jmp draw_text
 make_space:	
-	mov eax, 26 ; de la 0 pana la 25 sunt litere, 26 e space
+	mov eax, 26 ; 0-25 are letters, 26 is space
 	lea esi, letters
 	
 draw_text:
@@ -134,14 +131,14 @@ draw_text:
 	add esi, eax
 	mov ecx, symbol_height
 bucla_simbol_linii:
-	mov edi, [ebp+arg2] ; pointer la matricea de pixeli
-	mov eax, [ebp+arg4] ; pointer la coord y
+	mov edi, [ebp+arg2] ; pixel matrix pointer
+	mov eax, [ebp+arg4] ; pointer to y 
 	add eax, symbol_height
 	sub eax, ecx
 	mov ebx, area_width
 	mul ebx
-	add eax, [ebp+arg3] ; pointer la coord x
-	shl eax, 2 ; inmultim cu 4, avem un DWORD per pixel
+	add eax, [ebp+arg3] ; pointer to x
+	shl eax, 2 ; multiply by 4, DWORD per pixel
 	add edi, eax
 	push ecx
 	mov ecx, symbol_width
@@ -408,10 +405,10 @@ collision_check proc
 	;sub eax, 2
 	mov ecx, 20
 	div ecx 
-	add ebx, eax; ebx are ind in mat ghetto a lui pacman
+	add ebx, eax; ebx holds pacman index in map matrix
 	
 
-	mov al, ghetto[ebx-1];stanga
+	mov al, ghetto[ebx-1];left
 	cmp al,  2
 	jle chk_rhgt
 	mov byte ptr[esi+1], 0
@@ -542,7 +539,7 @@ ghost_movement proc
 	mov eax, 0
 	
 	
-	mov al, ghetto[ebx-1];stanga
+	mov al, ghetto[ebx-1];left
 	cmp al,  2
 	jle gh_chk_rhgt
 	mov byte ptr[esi+1], 0
@@ -566,19 +563,21 @@ ghost_movement proc
 	jle gh_cnmv
 	mov byte ptr[esi+2], 0
 	
-	
-	gh_cnmv:
+
 	rdtsc
+	mov ecx, eax 
+	gh_cnmv:
+	mov eax, ecx
 	xor edx, edx
 	mov ebx, 4
 	div ebx
-	xor ebx, ebx 
+	xor ebx, ebx
+	inc ecx
 	mov bl, byte ptr [esi+edx]
-	cmp ebx,0 
+	cmp ebx,0  
 	jz gh_cnmv
 	inc edx 
 	mov eax, edx 
-	mul ebx 
 	
 	
 	no_collisions:
@@ -608,6 +607,7 @@ ghost_movement proc
 	pop ebp
 	ret
 ghost_movement endp
+
 cc macro x,y,dir_vec,drarea
 	push drarea
 	push dir_vec
@@ -706,13 +706,9 @@ show_lives proc
 show_lives endp
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; un macro ca sa apelam mai usor desenarea simbolului
-
-
-; functia de desenare - se apeleaza la fiecare click
-; sau la fiecare interval de 200ms in care nu s-a dat click
-; arg1 - evt (0 - initializare, 1 - click, 2 - s-a scurs intervalul fara click)
-; arg2 - x ( in caz ca se apasa tasta- x are ascii pt tasta aia)
+; draw func called on every input or 200ms
+; arg1 - evt (0 - init, 1 - click, 2 - 200ms)
+; arg2 - x (key pressed)
 ; arg3 - y
 draw proc
 	push ebp
@@ -756,9 +752,9 @@ draw proc
 	cmp eax, 1
 	jz evt_click
 	cmp eax, 2
-	jz clrmov ; nu s-a efectuat click pe nimic
+	jz clrmov ; no click
 	push eax
-	;mai jos e codul care intializeaza fereastra cu pixeli albi
+	;init window with white pixels
 	mov eax, area_width
 	mov ebx, area_height
 	mul ebx
@@ -784,11 +780,8 @@ movement:
 	div ebx 
 	cmp edx, 0
 	jne afisare_litere 
-	ghost_movement_macro yellow_XY, orange_mov_dir, orange_dir_vec, 3
-	cc pacman_XY[0], pacman_XY[4],offset direction, area
-	ghost_movement_macro red_XY, red_mov_dir, red_dir_vec, 0
-	ghost_movement_macro blue_XY, blue_mov_dir, blue_dir_vec, 1
-	ghost_movement_macro pink_XY, pink_mov_dir, pink_dir_vec, 2
+	
+	
 	mov eax, [ebp+arg2]
 	cmp eax, 'A'
 	je left
@@ -829,18 +822,20 @@ movement:
 	jmp afisare_litere
 	
 clrmov:
-	mov movctr, -1
+	mov movctr, 0
 	
 evt_timer:
 	
+	cc pacman_XY[0], pacman_XY[4],offset direction, area
+	ghost_movement_macro yellow_XY, orange_mov_dir, orange_dir_vec, 3
+	ghost_movement_macro red_XY, red_mov_dir, red_dir_vec, 0
+	ghost_movement_macro blue_XY, blue_mov_dir, blue_dir_vec, 1
+	ghost_movement_macro pink_XY, pink_mov_dir, pink_dir_vec, 2
 	inc counter
 	
 afisare_litere:
 	
-	inc movctr
-	;afisam valoarea counter-ului curent (sute, zeci si unitati)
 	mov ebx, 10
-	
 	
 	mov ecx, 0
 	map1:	
@@ -865,7 +860,7 @@ afisare_litere:
 	mov y, ecx
 	mov x, edx
 	mov ecx, model_H
-	;ebx si eax sunt libere
+	;ebx si eax are free
 	map2:
 	mov edi, area
 	mov eax, y 
@@ -931,7 +926,7 @@ final_draw:
 draw endp
 
 start:
-	;alocam memorie pentru zona de desenat
+	;mem alloc for drawing area
 	mov eax, area_width
 	mov ebx, area_height
 	mul ebx
@@ -941,7 +936,7 @@ start:
 	add esp, 4
 	;int 3
 	mov area, eax
-	; apelam functia de desenare a ferestrei
+	; calling the window drawing func
 	; typedef void (*DrawFunc)(int evt, int x, int y);
 	; void __cdecl BeginDrawing(const char *title, int width, int height, unsigned int *area, DrawFunc draw);
 	push offset draw
@@ -952,7 +947,7 @@ start:
 	call BeginDrawing
 	add esp, 20
 	
-	;terminarea programului
+	;return 0
 	push 0
 	call exit
 end start
